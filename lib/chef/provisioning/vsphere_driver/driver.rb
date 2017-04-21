@@ -146,9 +146,10 @@ module ChefProvisioningVsphere
         machine_spec, bootstrap_options
       )
 
+      datacenter = bootstrap_options[:datacenter]
+      init_vsphere_helper(datacenter)
       vm = find_or_create_vm(bootstrap_options, machine_spec, action_handler)
-
-      add_machine_spec_location(vm, machine_spec)
+      add_machine_spec_location(vm, machine_spec, datacenter)
 
       action_handler.performed_action(machine_msg(
                                         machine_spec.name,
@@ -166,14 +167,15 @@ module ChefProvisioningVsphere
       @config = deep_symbolize(@config.to_h)
     end
 
-    def add_machine_spec_location(vm, machine_spec)
+    def add_machine_spec_location(vm, machine_spec, datacenter)
       machine_spec.location = {
         'driver_url' => driver_url,
         'driver_version' => VERSION,
         'server_id' => vm.config.instanceUuid,
         'is_windows' => is_windows?(vm),
         'allocated_at' => Time.now.utc.to_s,
-        'ipaddress' => vm.guest.ipAddress
+        'ipaddress' => vm.guest.ipAddress,
+        'datacenter' => datacenter
       }
     end
 
@@ -219,6 +221,7 @@ module ChefProvisioningVsphere
     def ready_machine(action_handler, machine_spec, machine_options)
       machine_options = deep_symbolize(machine_options)
       merge_options! machine_options
+      init_vsphere_helper(machine_spec.location['datacenter'])
 
       vm = start_machine(action_handler, machine_spec, machine_options)
       if vm.nil?
@@ -419,6 +422,7 @@ module ChefProvisioningVsphere
     def destroy_machine(action_handler, machine_spec, machine_options)
       machine_options = deep_symbolize(machine_options)
       merge_options! machine_options
+      init_vsphere_helper(machine_spec.location['datacenter'])
       vm = vm_for(machine_spec)
       if vm
         action_handler.perform_action "Delete VM [#{vm.parent.name}/#{vm.name}]" do
@@ -439,6 +443,7 @@ module ChefProvisioningVsphere
     def stop_machine(action_handler, machine_spec, machine_options)
       machine_options = deep_symbolize(machine_options)
       merge_options! machine_options
+      init_vsphere_helper(machine_spec.location['datacenter'])
       vm = vm_for(machine_spec)
       if vm
         action_handler.perform_action "Shutdown guest OS and power off VM [#{vm.parent.name}/#{vm.name}]" do
@@ -450,6 +455,7 @@ module ChefProvisioningVsphere
     def start_machine(action_handler, machine_spec, machine_options)
       machine_options = deep_symbolize(machine_options)
       merge_options! machine_options
+      init_vsphere_helper(machine_spec.location['datacenter'])
       vm = vm_for(machine_spec)
       if vm
         action_handler.perform_action "Power on VM [#{vm.parent.name}/#{vm.name}]" do
@@ -582,11 +588,16 @@ module ChefProvisioningVsphere
       vm
     end
 
-    def vsphere_helper
-      @vsphere_helper ||= VsphereHelper.new(
+    def init_vsphere_helper(datacenter)
+      @vsphere_helper = VsphereHelper.new(
         connect_options,
-        config[:machine_options][:bootstrap_options][:datacenter]
+        datacenter
       )
+    end
+
+    def vsphere_helper
+      raise 'foo' if @vsphere_helper.nil?
+      return @vsphere_helper
     end
 
     def vm_template_for(bootstrap_options)
