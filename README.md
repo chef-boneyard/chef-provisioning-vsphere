@@ -199,6 +199,33 @@ $ knife cookbook upload my_cookbook
 $ chef-client -o 'my_cookbook::provision' -c .chef/knife.rb
 ```
 
+### Delete recipe
+
+Here is a robust delete/destroy recipe as an example.
+```ruby
+require 'chef/provisioning'
+
+chef_gem 'chef-provisioning-vsphere' do
+  action :install
+  compile_time true
+end
+
+require 'chef/provisioning/vsphere_driver'
+
+with_vsphere_driver host: 'HOST',
+                     insecure: true,
+                     user:     'administrator@vsphere.local',
+                     password: 'P@ssw0rd!'
+
+with_machine_options bootstrap_options: {
+                       datacenter: 'Datacenter'
+                     }
+
+machine 'testing' do
+  action :destroy
+end
+```
+
 ### Prefix all SSH commands with 'sudo ', for installing on hosts where options[:bootstrap_options][:ssh][:user] is not 'root'. The user must have 'NOPASSWD:ALL' in /etc/sudoers. This is compatible with chef-provisioning-fog functionality
 
 ```ruby
