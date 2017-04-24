@@ -194,7 +194,8 @@ module ChefProvisioningVsphere
         vm = clone_vm(
           action_handler,
           bootstrap_options,
-          machine_spec.name
+          machine_spec.name,
+          @vsphere_helper.datacenter_name
         )
       end
       vm
@@ -419,10 +420,10 @@ module ChefProvisioningVsphere
       machine_for(machine_spec, machine_options)
     end
 
-    def destroy_machine(action_handler, machine_spec, machine_options)
-      machine_options = deep_symbolize(machine_options)
+    def destroy_machine(action_handler, machine_options, machine_spec)
+      machine_options = deep_symbolize(machine_options.data)
+      init_vsphere_helper(machine_options[:normal][:chef_provisioning][:reference][:datacenter])
       merge_options! machine_options
-      init_vsphere_helper(machine_spec.location['datacenter'])
       vm = vm_for(machine_spec)
       if vm
         action_handler.perform_action "Delete VM [#{vm.parent.name}/#{vm.name}]" do
@@ -504,6 +505,7 @@ module ChefProvisioningVsphere
         bootstrap_options = bootstrap_options[:customization_spec]
 
         if bootstrap_options.is_a?(String)
+          init_vsphere_helper(machine_spec.location['datacenter'])
           spec = vsphere_helper.find_customization_spec(bootstrap_options)
           return spec.nicSettingMap[0].adapter.ip.is_a?(RbVmomi::VIM::CustomizationFixedIp)
         elsif bootstrap_options.key?(:ipsettings)
@@ -540,13 +542,15 @@ module ChefProvisioningVsphere
 
     def vm_for(machine_spec)
       if machine_spec.location
+        init_vsphere_helper(machine_spec.location['datacenter'])
         vsphere_helper.find_vm_by_id(machine_spec.location['server_id'])
       end
     end
 
-    def clone_vm(action_handler, bootstrap_options, machine_name)
+    def clone_vm(action_handler, bootstrap_options, machine_name, machine_spec)
       vm_template = vm_template_for(bootstrap_options)
 
+      init_vsphere_helper(machine_spec)
       spec_builder = CloneSpecBuilder.new(vsphere_helper, action_handler)
       clone_spec = spec_builder.build(vm_template, machine_name, bootstrap_options)
       Chef::Log.debug("Clone spec: #{clone_spec.pretty_inspect}")
@@ -596,7 +600,7 @@ module ChefProvisioningVsphere
     end
 
     def vsphere_helper
-      raise 'foo' if @vsphere_helper.nil?
+      raise 'You need a Datacenter for me to talk to, I suggest looking at the README :D' if @vsphere_helper.nil?
       return @vsphere_helper
     end
 
@@ -639,7 +643,7 @@ module ChefProvisioningVsphere
       require 'chef/provisioning/convergence_strategy/install_cached'
       require 'chef/provisioning/convergence_strategy/no_converge'
 
-      mopts = machine_options[:convergence_options].to_hash.dup
+      mopts = machine_options[:convergence_options].to_h.dup
       if mopts[:chef_server]
         mopts[:chef_server] = mopts[:chef_server].to_hash.dup
         mopts[:chef_server][:options] = mopts[:chef_server][:options].to_hash.dup if mopts[:chef_server][:options]
@@ -735,6 +739,7 @@ module ChefProvisioningVsphere
     def ip_to_bootstrap(bootstrap_options, vm)
       if has_static_ip(bootstrap_options)
         if bootstrap_options[:customization_spec].is_a?(String)
+          init_vsphere_helper(machine_spec.location['datacenter'])
           spec = vsphere_helper.find_customization_spec(bootstrap_options[:customization_spec])
           spec.nicSettingMap[0].adapter.ip.ipAddress
         else

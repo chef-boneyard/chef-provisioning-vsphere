@@ -65,6 +65,14 @@ end
 
 ```
 
+If you would like to just bootstrap a few machines, without provisioning Chef on them, you can change the `action` to something like:
+
+```ruby
+machine "my_machine_name" do
+  action :ready
+end
+```
+
 ## Provision!
 
 ```shell
