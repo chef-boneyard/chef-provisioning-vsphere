@@ -1,5 +1,7 @@
 # chef-provisioning-vsphere
 
+<!-- Testing PR builder -->
+
 [![Gem Version](https://img.shields.io/gem/v/chef-provisioning-vsphere.svg)][gem]
 [![Build Status](https://travis-ci.org/chef-partners/chef-provisioning-vsphere.svg?branch=master)][travis]
 [![Inline docs](http://inch-ci.org/github/chef-partners/chef-provisioning-vsphere.svg?branch=master)](http://inch-ci.org/github/chef-partners/chef-provisioning-vsphere)
