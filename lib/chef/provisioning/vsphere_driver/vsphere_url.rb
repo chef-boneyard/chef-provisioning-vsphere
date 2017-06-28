@@ -1,5 +1,5 @@
 # frozen_string_literal: false
-require "uri"
+require 'uri'
 
 # The main URI Module
 module URI
@@ -8,20 +8,20 @@ module URI
     # Default port for connecting to the vSphere cluster Webserver
     DEFAULT_PORT = 443
     # Default path for connecting to the vSphere cluster URL
-    DEFAULT_PATH = "/sdk".freeze
+    DEFAULT_PATH = '/sdk'.freeze
 
     # Creates the URL from options that are decided
     #
     def self.from_config(options)
       parts = []
-      parts << "vsphere://"
+      parts << 'vsphere://'
       parts << options[:host]
-      parts << ":"
+      parts << ':'
       parts << (options[:port] || DEFAULT_PORT)
       parts << (options[:path] || DEFAULT_PATH)
-      parts << "?use_ssl="
+      parts << '?use_ssl='
       parts << (options[:use_ssl] == false ? false : true)
-      parts << "&insecure="
+      parts << '&insecure='
       parts << (options[:insecure] || false)
       URI parts.join
     end
@@ -30,10 +30,10 @@ module URI
     #
     def use_ssl
       if query
-        ssl_query = query.split("&").each.select do |q|
-          q.start_with?("use_ssl=")
+        ssl_query = query.split('&').each.select do |q|
+          q.start_with?('use_ssl=')
         end.first
-        ssl_query == "use_ssl=true"
+        ssl_query == 'use_ssl=true'
       else
         true
       end
@@ -43,14 +43,14 @@ module URI
     #
     def insecure
       if query
-        insecure_query = query.split("&").each.select do |q|
-          q.start_with?("insecure=")
+        insecure_query = query.split('&').each.select do |q|
+          q.start_with?('insecure=')
         end.first
-        insecure_query == "insecure=true"
+        insecure_query == 'insecure=true'
       else
         false
       end
     end
   end
-  @@schemes["VSPHERE"] = VsphereUrl
+  @@schemes['VSPHERE'] = VsphereUrl
 end

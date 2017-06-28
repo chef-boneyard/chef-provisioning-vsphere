@@ -1,5 +1,5 @@
 # frozen_string_literal: true
-require "chef/provisioning/driver"
+require 'chef/provisioning/driver'
 
 # Provisions machines in vSphere.
 module ChefProvisioningVsphere
@@ -36,16 +36,16 @@ module ChefProvisioningVsphere
     def find_port?(vm, options)
       @port = options[:ssh][:port]
       customization_spec = options[:customization_spec]
-      if vm.config.guestId.start_with?("win")
+      if vm.config.guestId.start_with?('win')
         if customization_spec.is_a?(Hash)
           winrm_transport =
             customization_spec[:winrm_transport].nil? ? :negotiate : customization_spec[:winrm_transport].to_sym
         end
         winrm_transport ||= :negotiate
-        default_win_port = winrm_transport == :ssl ? "5986" : "5985"
+        default_win_port = winrm_transport == :ssl ? '5986' : '5985'
         @port = default_win_port if @port.nil?
       elsif port.nil?
-        @port = "22"
+        @port = '22'
       end
       true
     end
