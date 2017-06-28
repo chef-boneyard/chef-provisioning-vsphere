@@ -1,6 +1,6 @@
 # frozen_string_literal: true
-require "chef/provisioning"
-require "chef/provisioning/vsphere_driver/driver"
+require 'chef/provisioning'
+require 'chef/provisioning/vsphere_driver/driver'
 
 # The main Chef class for all the Chef code!
 class Chef
