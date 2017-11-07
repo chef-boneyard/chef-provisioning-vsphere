@@ -268,7 +268,7 @@ module ChefProvisioningVsphere
         task = vm.ReconfigVM_Task(
           spec: RbVmomi::VIM.VirtualMachineConfigSpec(
             deviceChange: [
-              vsphere_helper.virtual_disk_for(
+              virtual_disk_for(
                 vm,
                 datastore,
                 size
