@@ -253,6 +253,59 @@ module ChefProvisioningVsphere
       )
     end
 
+    # Creates the additional virtual disk for the VM
+    #
+    # @param [Object] vm the VM object.
+    # @param [Subject] datastore the datastore the disk will be created on.
+    # @param [Subject] size_gb the size of the disk.
+    def set_additional_disks_for(vm, datastore, additional_disk_size_gb)
+      (additional_disk_size_gb.is_a?(Array) ? additional_disk_size_gb : [additional_disk_size_gb]).each do |size|
+        size = size.to_i
+        next if size == 0
+        if datastore.to_s.empty?
+          raise ':datastore must be specified when adding a disk to a cloned vm'
+        end
+        task = vm.ReconfigVM_Task(
+          spec: RbVmomi::VIM.VirtualMachineConfigSpec(
+            deviceChange: [
+              vsphere_helper.virtual_disk_for(
+                vm,
+                datastore,
+                size
+              )
+            ]
+          )
+        )
+        task.wait_for_completion
+      end
+    end
+
+    # Updates the main virtual disk for the VM
+    # This can only add capacity to the main disk, it is not possible to reduce the capacity.
+    #
+    # @param [Object] vm the VM object.
+    # @param [Subject] size_gb the final size of the disk.
+    def update_main_disk_size_for(vm, size_gb)
+      disk = vm.disks.first
+      size_kb = size_gb.to_i * 1024 * 1024
+      if disk.capacityInKB > size_kb
+        Chef::Log.warn("Specified disk size #{size_gb}GB is inferior to the template's disk size (#{disk.capacityInKB / 1024**2}GB).
+        The VM disk size will remain the same.") if size_gb.to_i > 0
+        return false
+      end
+      disk.capacityInKB = size_kb
+      vm.ReconfigVM_Task(
+        spec: RbVmomi::VIM.VirtualMachineConfigSpec(
+          deviceChange: [
+            {
+              operation: :edit,
+              device: disk,
+            }
+          ]
+        )
+      ).wait_for_completion
+    end
+
     # Add a new network card via the boot_options
     #
     # @param [Object] action_handler TODO
