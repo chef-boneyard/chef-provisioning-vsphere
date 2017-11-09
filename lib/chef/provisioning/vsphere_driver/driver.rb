@@ -889,8 +889,9 @@ module ChefProvisioningVsphere
         else
           ## Check if true available
           vm_ip = bootstrap_options[:customization_spec][:ipsettings][:ip] unless vm_helper.ip?
+          ready_timeout = bootstrap_options[:ready_timeout] || 90
           nb_attempts = 0
-          until @vm_helper.open_port?(vm_ip, @vm_helper.port, 1) || nb_attempts > bootstrap_options[:ready_timeout]
+          until @vm_helper.open_port?(vm_ip, @vm_helper.port, 1) || nb_attempts > ready_timeout
             print '.'
             nb_attempts += 1
           end
