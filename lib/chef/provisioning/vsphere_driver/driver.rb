@@ -889,11 +889,6 @@ module ChefProvisioningVsphere
         else
           ## Check if true available
           vm_ip = bootstrap_options[:customization_spec][:ipsettings][:ip] unless vm_helper.ip?
-          # TODO: please create a better solution for the below
-          # bootstrap_options shouldn't contain the :ready_timeout value - machine_options does
-          # however, I don't want to break previous work or change all the calls made to this function
-          # setting a default, as for most people bootstrap_options[:ready_timeout] will be nil
-          # another possible workaround is to add a second entry under bootstrap_options in .kitchen.yml
           ready_timeout = bootstrap_options[:ready_timeout] || 90
           nb_attempts = 0
           until @vm_helper.open_port?(vm_ip, @vm_helper.port, 1) || nb_attempts > ready_timeout
