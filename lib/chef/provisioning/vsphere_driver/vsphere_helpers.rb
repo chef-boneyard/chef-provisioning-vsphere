@@ -468,7 +468,7 @@ module ChefProvisioningVsphere
         return res unless res.nil?
         base.childEntity.each do |child|
           res = traverse_folders_for_network(child, item)
-          return res unless res.nil?
+          return res unless res.nil? || res.respond_to?(:empty?) && res.empty?
         end
       when RbVmomi::VIM::VmwareDistributedVirtualSwitch
         idx = base.summary.portgroupName.find_index(item)
