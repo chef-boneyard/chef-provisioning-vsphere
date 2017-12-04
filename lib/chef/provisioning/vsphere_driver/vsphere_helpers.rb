@@ -261,7 +261,7 @@ module ChefProvisioningVsphere
     def set_additional_disks_for(vm, datastore, additional_disk_size_gb)
       (additional_disk_size_gb.is_a?(Array) ? additional_disk_size_gb : [additional_disk_size_gb]).each do |size|
         size = size.to_i
-        next if size == 0
+        next if size.zero?
         if datastore.to_s.empty?
           raise ':datastore must be specified when adding a disk to a cloned vm'
         end
@@ -289,8 +289,11 @@ module ChefProvisioningVsphere
       disk = vm.disks.first
       size_kb = size_gb.to_i * 1024 * 1024
       if disk.capacityInKB > size_kb
-        Chef::Log.warn("Specified disk size #{size_gb}GB is inferior to the template's disk size (#{disk.capacityInKB / 1024**2}GB).
-        The VM disk size will remain the same.") if size_gb.to_i > 0
+        if size_gb.to_i > 0
+          msg = "Specified disk size #{size_gb}GB is inferior to the template's disk size (#{disk.capacityInKB / 1024**2}GB)."
+          msg += "\nThe VM disk size will remain the same."
+          Chef::Log.warn(msg)
+        end
         return false
       end
       disk.capacityInKB = size_kb
@@ -299,7 +302,7 @@ module ChefProvisioningVsphere
           deviceChange: [
             {
               operation: :edit,
-              device: disk,
+              device: disk
             }
           ]
         )
