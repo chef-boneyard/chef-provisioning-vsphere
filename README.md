@@ -90,8 +90,10 @@ This will use chef-zero and needs no chef server (only works for ssh). Note that
 - `[:resource_pool]` - `{cluster}`/`{resource pool}` to use during provisioning 
 (for single-host setups, use `{vsphere_ip / vsphere_hostname}`/`{resource pool}`)
 - `[:additional_disk_size_gb]` - an array of numbers, each signifying the number of gigabytes to assign to an additional disk (*this requires a datastore to be specified*)
+- `[:main_disk_size_gb]` - the desired size of the VM's main virtual disk in gigabytes. (*Will be ignored if lower than the template's main disk size*)
 - `[:bootstrap_ipv4]` - `true` / `false`, set to `true` to wait for an IPv4 address to become available before bootstrapping.
 - `[:ipv4_timeout]` - use with `[:bootstrap_ipv4]`, set the time in seconds to wait before an IPv4 address is received (defaults to 30)
+- `[:ip_ready_timeout]` - set the time in seconds to wait before the machine IP is ready and connectable (defaults to 300)
 - `[:ssh][:user]` user to use for ssh/winrm (defaults to root on linux/administrator on windows)
 - `[:ssh][:password]` - password to use for ssh/winrm
 - `[:ssh][:paranoid]` - specifies the strictness of the host key verification checking

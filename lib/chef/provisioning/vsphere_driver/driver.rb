@@ -587,7 +587,7 @@ module ChefProvisioningVsphere
 
     # Ubuntu requires some...hacking to get DNS to work.
     #
-    # @param [Object] bootstrap_options The bootstarp options required to start the VM.
+    # @param [Object] bootstrap_options The bootstrap options required to start the VM.
     # @param [Object] _machine_spec The machine spec required to start the VM.
     # @param [Object] machine Machine object to connect to.
     def setup_ubuntu_dns(machine, bootstrap_options, _machine_spec)
@@ -616,7 +616,7 @@ module ChefProvisioningVsphere
 
     # Verify static IP.
     #
-    # @param [Object] bootstrap_options The bootstarp options required to start the VM.
+    # @param [Object] bootstrap_options The bootstrap options required to start the VM.
     def has_static_ip(bootstrap_options)
       if bootstrap_options.key?(:customization_spec)
         bootstrap_options = bootstrap_options[:customization_spec]
@@ -685,31 +685,8 @@ module ChefProvisioningVsphere
 
       vm = vsphere_helper.find_vm(vm_folder, machine_name)
 
-      additional_disk_size_gb = bootstrap_options[:additional_disk_size_gb]
-      unless additional_disk_size_gb.is_a?(Array)
-        additional_disk_size_gb = [additional_disk_size_gb]
-      end
-
-      additional_disk_size_gb.each do |size|
-        size = size.to_i
-        next if size == 0
-        if bootstrap_options[:datastore].to_s.empty?
-          raise ':datastore must be specified when adding a disk to a cloned vm'
-        end
-        task = vm.ReconfigVM_Task(
-          spec: RbVmomi::VIM.VirtualMachineConfigSpec(
-            deviceChange: [
-              vsphere_helper.virtual_disk_for(
-                vm,
-                bootstrap_options[:datastore],
-                size
-              )
-            ]
-          )
-        )
-        task.wait_for_completion
-      end
-
+      vsphere_helper.update_main_disk_size_for(vm, bootstrap_options[:main_disk_size_gb])
+      vsphere_helper.set_additional_disks_for(vm, bootstrap_options[:datastore], bootstrap_options[:additional_disk_size_gb])
       vm
     end
 
@@ -858,7 +835,7 @@ module ChefProvisioningVsphere
       )
     end
 
-    # Find the IP to bootstrap against
+    # Return a SSH transport for the machine
     #
     # @param [String] host The host the VM is connecting to
     # @param [Object] options Options that are required to connect to the host from Chef-Provisioning
@@ -880,78 +857,81 @@ module ChefProvisioningVsphere
     # @param [Object] bootstrap_options The bootstrap options from Chef-Provisioning
     # @param [Object] vm The VM object from Chef-Provisioning
     def ip_to_bootstrap(bootstrap_options, vm)
+      start_time = Time.now.utc
+      timeout = bootstrap_ip_ready_timeout(bootstrap_options)
       @vm_helper.find_port?(vm, bootstrap_options) unless vm_helper.port?
-      vm_ip = nil
+      # First get the IP to be tested
       if has_static_ip(bootstrap_options)
         if bootstrap_options[:customization_spec].is_a?(String)
           spec = vsphere_helper.find_customization_spec(bootstrap_options[:customization_spec])
-          vm_ip = spec.nicSettingMap[0].adapter.ip.ipAddress
+          vm_ip = spec.nicSettingMap[0].adapter.ip.ipAddress # Use a direct return here?
         else
-          ## Check if true available
-          vm_ip = bootstrap_options[:customization_spec][:ipsettings][:ip] unless vm_helper.ip?
-          nb_attempts = 0
-          until @vm_helper.open_port?(vm_ip, @vm_helper.port, 1) || nb_attempts > bootstrap_options[:ready_timeout]
-            print '.'
-            nb_attempts += 1
-          end
+          vm_ip = bootstrap_options[:customization_spec][:ipsettings][:ip]
         end
+      elsif use_ipv4_during_bootstrap?(bootstrap_options)
+        vm_ip = wait_for_ipv4(bootstrap_ipv4_timeout(bootstrap_options), vm)
       else
-        if use_ipv4_during_bootstrap?(bootstrap_options)
-          until @vm_helper.open_port?(vm_ip, @vm_helper.port, 1)
-            wait_for_ipv4(bootstrap_ip_timeout(bootstrap_options), vm)
-          end
-        end
-        vm_ip = vm.guest.ipAddress until vm_guest_ip?(vm) && @vm_helper.open_port?(vm_ip, @vm_helper.port, 1) # Don't set empty ip
+        vm_ip = vm.guest.ipAddress until vm_guest_ip?(vm) || Time.now.utc - start_time > timeout
       end
-      vm_ip.to_s
+      # Then check that it is reachable
+      until Time.now.utc - start_time > timeout
+        print '.'
+        return vm_ip.to_s if @vm_helper.open_port?(vm_ip, @vm_helper.port, 1)
+        sleep 1
+      end
+      raise "Timed out (#{timeout}s) waiting for ip #{vm_ip} to be connectable"
     end
 
     # Force IPv4 a bootstrap, default: false
     #
     # @param [Object] bootstrap_options The bootstrap options from Chef-Provisioning
     def use_ipv4_during_bootstrap?(bootstrap_options)
-      if bootstrap_options.key?(:bootstrap_ipv4)
-        return bootstrap_options[:bootstrap_ipv4] == true
-      end
-      false
+      bootstrap_options.key?(:bootstrap_ipv4) && bootstrap_options[:bootstrap_ipv4] == true
     end
 
-    # Setting a bootstrap ip timeout, default: 30
+    # Setting a bootstrap ipv4 timeout, default: 30
     #
     # @param [Object] bootstrap_options The bootstrap options from Chef-Provisioning
-    def bootstrap_ip_timeout(bootstrap_options)
-      if bootstrap_options.key?(:ipv4_timeout)
-        return bootstrap_options[:ipv4_timeout].to_i
-      end
-      30
+    def bootstrap_ipv4_timeout(bootstrap_options)
+      bootstrap_options.key?(:ipv4_timeout) ? bootstrap_options[:ipv4_timeout].to_i : 30
     end
 
-    # What for IPv4 address
+    # Setting a bootstrap ip timeout, default: 300
     #
-    # @param [String] timeout Declared a timeout
+    # @param [Object] bootstrap_options The bootstrap options from Chef-Provisioning
+    def bootstrap_ip_ready_timeout(bootstrap_options)
+      bootstrap_options.key?(:ip_ready_timeout) ? bootstrap_options[:ip_ready_timeout].to_i : 300
+    end
+
+    # Wait for IPv4 address
+    #
+    # @param [String] timeout_seconds A timeout in seconds, an error will be raised if it is reached
     # @param [Object] vm The VM object from Chef-Provisioning
-    def wait_for_ipv4(timeout, vm)
-      sleep_time = 5
-      print 'Waiting for ipv4 address.'
-      tries = 0
-      start_search_ip = true
-      max_tries = timeout > sleep_time ? timeout / sleep_time : 1
-      while start_search_ip && (tries += 1) <= max_tries
-        print '.'
-        sleep sleep_time
-        vm_ip = vm.guest.ipAddress if vm_guest_ip?(vm)
-        start_search_ip = false if @vm_helper.open_port?(vm_ip, @vm_helper.port, 1)
+    def wait_for_ipv4(timeout_seconds, vm)
+      Chef::Log.info("Waiting #{timeout_seconds}s for ipv4 address.")
+
+      start_time = Time.now.utc
+      while (Time.now.utc - start_time) <= timeout_seconds
+        # print '.'
+        sleep 5
+        vm_ips = all_ips_for(vm)
+        Chef::Log.info("Found IP address(es): #{vm_ips}")
+        next unless vm_guest_ip?(vm)
+        vm_ips.each do |vm_ip|
+          if IPAddr.new(vm_ip).ipv4?
+            Chef::Log.info("Found ipv4 address: #{vm_ip}")
+            return vm_ip
+          end
+        end
       end
-      raise 'Timed out waiting for ipv4 address!' if tries > max_tries
-      puts 'Found ipv4 address!'
-      true
+      raise 'Timed out waiting for ipv4 address!'
     end
 
     # What is the VM guest IP
     #
     # @param [Object] vm The VM object from Chef-Provisioning
     def vm_guest_ip?(vm)
-      vm.guest.guestState == 'running' && vm.guest.toolsRunningStatus == 'guestToolsRunning' && !vm.guest.ipAddress.nil? && IPAddr.new(vm.guest.ipAddress).ipv4?
+      vm.guest.guestState == 'running' && vm.guest.toolsRunningStatus == 'guestToolsRunning' && !vm.guest.ipAddress.nil?
     end
   end
 end
