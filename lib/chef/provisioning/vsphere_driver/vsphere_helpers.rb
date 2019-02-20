@@ -403,6 +403,11 @@ module ChefProvisioningVsphere
         RbVmomi::VIM::VirtualEthernetCardDistributedVirtualPortBackingInfo(
           port: port
         )
+      elsif network.is_a? RbVmomi::VIM::OpaqueNetwork
+        RbVmomi::VIM::VirtualEthernetCardOpaqueNetworkBackingInfo(
+          opaqueNetworkType: network.summary.opaqueNetworkType,
+          opaqueNetworkId: network.summary.opaqueNetworkId
+        )
       else
         RbVmomi::VIM::VirtualEthernetCardNetworkBackingInfo(
           deviceName: network_name.split("/").last
