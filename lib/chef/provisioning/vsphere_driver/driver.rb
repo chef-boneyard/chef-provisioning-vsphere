@@ -647,8 +647,8 @@ module ChefProvisioningVsphere
       if vm.guest.toolsRunningStatus != "guestToolsRunning"
         if action_handler.should_perform_actions
           action_handler.report_progress "waiting for #{machine_spec.name} (#{vm.config.instanceUuid} on #{driver_url}) to be ready ..."
-          until remaining_wait_time(machine_spec, machine_options) < 0 ||
-              (vm.guest.toolsRunningStatus == "guestToolsRunning" && vm.guest.ipAddress && !vm.guest.ipAddress.empty?)
+          invalid_ip_prefix = bootstrap_invalid_ip_prefix(machine_options[:bootstrap_options])
+          until remaining_wait_time(machine_spec, machine_options) < 0 || vm_guest_ip?(vm, invalid_ip_prefix)
             print "."
             sleep 5
           end
@@ -872,6 +872,7 @@ module ChefProvisioningVsphere
       vm_helper.find_port?(vm, bootstrap_options) unless vm_helper.port?
 
       # First get the IP to be tested
+      invalid_ip_prefix = bootstrap_invalid_ip_prefix(bootstrap_options)
       if has_static_ip(bootstrap_options)
         if bootstrap_options[:customization_spec].is_a?(String)
           spec = vsphere_helper.find_customization_spec(bootstrap_options[:customization_spec])
@@ -881,9 +882,9 @@ module ChefProvisioningVsphere
           vm_ip = bootstrap_options[:customization_spec][:ipsettings][:ip]
         end
       elsif use_ipv4_during_bootstrap?(bootstrap_options)
-        vm_ip = wait_for_ipv4(bootstrap_ipv4_timeout(bootstrap_options), vm)
+        vm_ip = wait_for_ipv4(bootstrap_ipv4_timeout(bootstrap_options), invalid_ip_prefix, vm)
       else
-        until vm_guest_ip?(vm) || Time.now.utc - start_time > timeout
+        until vm_guest_ip?(vm, invalid_ip_prefix) || Time.now.utc - start_time > timeout
           print "."
           sleep 1
         end
@@ -920,11 +921,19 @@ module ChefProvisioningVsphere
       bootstrap_options.key?(:ip_ready_timeout) ? bootstrap_options[:ip_ready_timeout].to_i : 300
     end
 
+    # Get invalid IP prefix which is used to filter out invalid IP of the VM, e.g. IP of the docker nic.
+    #
+    # @param [Object] bootstrap_options The bootstrap options from Chef-Provisioning
+    def bootstrap_invalid_ip_prefix(bootstrap_options)
+      bootstrap_options.key?(:invalid_ip_prefix) ? bootstrap_options[:invalid_ip_prefix].to_s : nil
+    end
+
     # Wait for IPv4 address
     #
     # @param [String] timeout_seconds A timeout in seconds, an error will be raised if it is reached
+    # @param [String] invalid_ip_prefix The invalid IP prefix
     # @param [Object] vm The VM object from Chef-Provisioning
-    def wait_for_ipv4(timeout_seconds, vm)
+    def wait_for_ipv4(timeout_seconds, invalid_ip_prefix, vm)
       Chef::Log.info("Waiting #{timeout_seconds}s for ipv4 address.")
 
       start_time = Time.now.utc
@@ -933,7 +942,7 @@ module ChefProvisioningVsphere
         sleep 5
         vm_ips = all_ips_for(vm)
         Chef::Log.info("Found IP address(es): #{vm_ips}")
-        next unless vm_guest_ip?(vm)
+        next unless vm_guest_ip?(vm, invalid_ip_prefix)
         vm_ips.each do |vm_ip|
           if IPAddr.new(vm_ip).ipv4?
             Chef::Log.info("Found ipv4 address: #{vm_ip}")
@@ -947,8 +956,12 @@ module ChefProvisioningVsphere
     # What is the VM guest IP
     #
     # @param [Object] vm The VM object from Chef-Provisioning
-    def vm_guest_ip?(vm)
-      vm.guest.guestState == "running" && vm.guest.toolsRunningStatus == "guestToolsRunning" && !vm.guest.ipAddress.nil?
+    # @param [String] invalid_ip_prefix The invalid IP prefix
+    def vm_guest_ip?(vm, invalid_ip_prefix)
+      # The docker interface usually has IP like 172.17.x.x, so need to filter it out.
+      vm.guest.guestState == "running" && vm.guest.toolsRunningStatus == "guestToolsRunning" &&
+        !vm.guest.ipAddress.nil? && !vm.guest.ipAddress.empty? &&
+        (!invalid_ip_prefix || !vm.guest.ipAddress.start_with?(invalid_ip_prefix))
     end
   end
 end

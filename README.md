@@ -95,6 +95,7 @@ This will use chef-zero and needs no chef server (only works for ssh). Note that
 - `[:bootstrap_ipv4]` - `true` / `false`, set to `true` to wait for an IPv4 address to become available before bootstrapping.
 - `[:ipv4_timeout]` - use with `[:bootstrap_ipv4]`, set the time in seconds to wait before an IPv4 address is received (defaults to 30)
 - `[:ip_ready_timeout]` - set the time in seconds to wait before the machine IP is ready and connectable (defaults to 300)
+- `[:invalid_ip_prefix]` - set the invalid prefix of the machine IP, e.g. the docker NIC IP like 172.17.0.1 (defaults to `nil` and can be set to something like '172.17')
 - `[:ssh][:user]` user to use for ssh/winrm (defaults to root on linux/administrator on windows)
 - `[:ssh][:password]` - password to use for ssh/winrm
 - `[:ssh][:paranoid]` - specifies the strictness of the host key verification checking
